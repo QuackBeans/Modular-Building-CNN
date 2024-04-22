@@ -7,6 +7,10 @@ name = "pypi"
 tensorflow = "*"
 pandas = "*"
 monday = "*"
+python-dotenv = "*"
+pillow = "*"
+scikit-learn = "*"
+tqdm = "*"
 
 [dev-packages]
 
