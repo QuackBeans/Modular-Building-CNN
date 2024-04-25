@@ -9,3 +9,13 @@ Originally i built a more rudimentary version, however this version is built fro
 
 The images are all sourced from modular building provider's websites, and tagged according to the provider's description.
 The images of course take up quite a bit of space, so i've zipped them and uploaded them separately. Just drop them in to the main directory.
+
+## Preprocessing.py
+
+This file is used to extract product data from my company's database, retrieving images of the buildings and their accompanying categories that had been manually added previously. This data is used to build up the training database for the model.
+
+Once it downloads the images, they are immediately converted into numpy format and zipped with the categories, ready to put in to the model.
+
+## MB_CNN.py
+
+This is the main module for the network training and testing.

@@ -23,7 +23,7 @@ from tqdm import tqdm
 
 # Load environment variables from .env file
 load_dotenv()
-apiKey = os.getenv('MONDAY_API_KEY')
+apiKey = os.getenv('MONDAY_API_KEY') # Add your key as a string here, or use environment variables .env
 apiUrl = 'https://api.monday.com/v2'
 headers = {"Authorization" : apiKey,
            "API-Version": '2024-04'}
