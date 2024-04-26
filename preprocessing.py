@@ -14,9 +14,7 @@ from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import MultiLabelBinarizer
 import pickle
 from tqdm import tqdm
-
-
-
+import urllib.parse
 
 
 # GLOBAL ----------------------------------------------------------------------------------------------------
@@ -31,13 +29,29 @@ headers = {"Authorization" : apiKey,
 monday = MondayClient(apiKey)
 
 
-
 #---------------
+
+# Function to read the last processed item ID from a .txt file
+def read_last_processed_item_id(filename='last_processed_item_id.txt'):
+    try:
+        with open(filename, 'r') as file:
+            last_item_id = int(file.read().strip())
+    except FileNotFoundError:
+        last_item_id = None
+    return last_item_id
+
+# Function to write the last processed item ID to a .txt file
+def write_last_processed_item_id(item_id, filename='last_processed_item_id.txt'):
+    with open(filename, 'w') as file:
+        file.write(str(item_id))
 
 # This query grabs all of the item ID's, tags, and photos, for all items that HAVE photos. This can be used to download the images.
 
 
-initial_query =  '''{
+# ... (previous imports and functions)
+
+# Initial query to grab items
+initial_query = '''{
   boards (ids: 1450631968) {
     items_page (limit: 500) {
       cursor
@@ -55,30 +69,28 @@ initial_query =  '''{
       }
     }
   }
-}
-'''
+}'''
 
-
-# Make the initial request to get the initial set of items
+# Make the initial request
 response = requests.post(apiUrl, json={'query': initial_query}, headers=headers)
 data = response.json()
 
-# Extract items and cursor
 items = data['data']['boards'][0]['items_page']['items']
+cursor = data['data']['boards'][0]['items_page']['cursor']
 
-cursor =  data['data']['boards'][0]['items_page']['cursor']
-# List to store all items
 all_items = items
-
-# Counter for items with non-empty "Images" column
 image_count = 0
-
-# Create a zip for the final elements
 zipped_data = []
+categories = []  # Initialize categories list
+
+# Read the last processed item ID
+last_processed_item_id = read_last_processed_item_id()
+
+categories = []  # Initialize categories list
+images_list = []  # Initialize images list
 
 # Loop to fetch all items using pagination with cursor
 while cursor:
-    # Update the query with the cursor value
     query = '''{
   boards(ids: 1450631968) {
     items_page(limit: 500, cursor:"%s") {
@@ -98,111 +110,78 @@ while cursor:
     }
   }
 }''' % cursor
+    
 
-    # Make the request for the next set of items
     response = requests.post(apiUrl, json={'query': query}, headers=headers)
     data = response.json()
-    
-    # Update items and cursor
+
     items = data['data']['boards'][0]['items_page']['items']
-    cursor =  data['data']['boards'][0]['items_page']['cursor']
-    
-    # Add items to all_items list
-    all_items.extend(items)
+    cursor = data['data']['boards'][0]['items_page']['cursor']
 
-# Extract TAGS and Images values for items where 'Images' column is not empty
-for item in all_items:
-    item_id = item['id']
-    
-    tags = None
-    images = None
-    
-    for column in item['column_values']:
-        column_title = column['column']['title']
-        text = column['text']
-        
-        if column_title == 'TAGS':
-            tags = text
-        elif column_title == 'Images':
-            images = text
-    
-    # Take public URLS of the images and add to a list. Also count the amount of items.
-    if images:
-        image_count += 1
-        
-        # Extract public_urls from the item
-        public_urls = [asset['public_url'] for asset in item['assets']]
-        
-        zipped_data.append((item_id, tags, public_urls))
+    for item in items:
+        item_id = item['id']
 
-        print(f"Item ID: {item_id}, TAGS: {tags}, Images: {public_urls} were added to the zip!")
+        # Skip items until the last processed item ID is reached
+        if last_processed_item_id and int(item_id) <= int(last_processed_item_id):
+            continue
 
-# save it with pickle as a backup
-with open('zipped_data.pkl', 'wb') as f:
-    pickle.dump(zipped_data, f)
+        tags = None
+        images = None
 
+        for column in item['column_values']:
+            column_title = column['column']['title']
+            text = column['text']
 
-# Print the total count of items with non-empty 'Images' column
-print(f"Total items with Images: {len(zipped_data)}. Does this match the amount on the database? Check!")
-#---------------
+            if column_title == 'TAGS':
+                tags = text
+            elif column_title == 'Images':
+                images = text
 
+        if images:
+            image_count += 1
+            public_urls = [asset['public_url'] for asset in item['assets']]
+            zipped_data.append((item_id, tags, public_urls))
+            print(f"Item ID: {item_id}, TAGS: {tags}, Images: {public_urls} were added to the zip!")
 
-# Download images and build dataset
-
-# Function to download, resize, and convert images to numpy arrays to build the database
-def download_and_convert_images(zipped_data, target_size=(224, 224)):
-    images = []
-    categories = []
-    
-    # Calculate total number of images for tqdm progress bar
-    total_images = sum(len(urls) for _, _, urls in zipped_data)
-    
-    with tqdm(total=total_images, desc="Processing images", unit="image") as pbar:
-        for item_id, tags, public_urls in zipped_data:
+            # Download, resize, and convert images
             for url in public_urls:
                 try:
-                    
-                    # Download the image
                     response = requests.get(url)
+                    response.raise_for_status()
+
                     img = Image.open(BytesIO(response.content))
-                    
-                    # Resize image
-                    img = img.resize(target_size)
-                    
-                    # Convert image to numpy array
+                    print(img)
+                    img = img.resize((224, 224))
                     img_array = np.array(img)
-                    
-                    # Split tags by comma and strip whitespace
+
                     tags_list = [tag.strip() for tag in tags.split(',')]
-                    
-                    # Add image and categories to lists
                     for tag in tags_list:
-                        images.append(img_array)
+                        images_list.append(img_array)
                         categories.append(tag)
-                    
-                    # Update progress bar
-                    pbar.update(1)
-                    
+
+                except requests.HTTPError as http_err:
+                    print(f"HTTP error occurred: {http_err}")
+                    write_last_processed_item_id(item_id)
+                    break
+
                 except Exception as e:
                     print(f"Error downloading {url}: {e}")
-                    pbar.update(1)  # Still update progress bar for failed downloads
-    
-    # Convert categories to binary labels
-    label_binarizer = MultiLabelBinarizer()
-    categories_encoded = label_binarizer.fit_transform([[cat] for cat in categories])
-    
-    return np.array(images), categories_encoded, label_binarizer.classes_
+                    write_last_processed_item_id(item_id)
+                    continue
 
-# Load zipped_data from pickle
-with open('zipped_data.pkl', 'rb') as f:
-    zipped_data = pickle.load(f)
+        # Convert categories to binary labels
+        label_binarizer = MultiLabelBinarizer()
+        categories_encoded = label_binarizer.fit_transform([[cat] for cat in categories])
 
-# Download, resize, and convert images
-images, categories_encoded, classes = download_and_convert_images(zipped_data)
+        # Save zipped_data with pickle
+        with open('zipped_data.pkl', 'wb') as f:
+            pickle.dump(zipped_data, f)
 
-# Save the processed dataset
-np.savez('processed_dataset.npz', images=images, categories=categories_encoded, classes=classes)
-print("Dataset was created!")
+        # Convert images_list to numpy array
+        images_array = np.array(images_list)
 
+        # Save the processed dataset
+        np.savez('processed_dataset.npz', images=images_array, categories=categories_encoded, classes=label_binarizer.classes_)
 
-# FIX IMAGE NOT DOWNLOADING
+        print(f"Total items with Images: {len(zipped_data)}. Does this match the amount on the database? Check!")
+        print("Dataset was created!")
