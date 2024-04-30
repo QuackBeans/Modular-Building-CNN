@@ -7,29 +7,20 @@ from monday import MondayClient
 import mimetypes
 from dotenv import load_dotenv
 import numpy as np
-import requests
 from PIL import Image
-from io import BytesIO
+import io
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import MultiLabelBinarizer
-import pickle
 from tqdm import tqdm
 import urllib.parse
-
-
-# GLOBAL ----------------------------------------------------------------------------------------------------
+import random
 
 # Load environment variables from .env file
 load_dotenv()
-apiKey = os.getenv('MONDAY_API_KEY') # Add your key as a string here, or use environment variables .env
+apiKey = os.getenv('MONDAY_API_KEY') 
 apiUrl = 'https://api.monday.com/v2'
 headers = {"Authorization" : apiKey,
            "API-Version": '2024-04'}
-
-monday = MondayClient(apiKey)
-
-
-#---------------
 
 # Function to read the last processed item ID from a .txt file
 def read_last_processed_item_id(filename='last_processed_item_id.txt'):
@@ -44,11 +35,6 @@ def read_last_processed_item_id(filename='last_processed_item_id.txt'):
 def write_last_processed_item_id(item_id, filename='last_processed_item_id.txt'):
     with open(filename, 'w') as file:
         file.write(str(item_id))
-
-# This query grabs all of the item ID's, tags, and photos, for all items that HAVE photos. This can be used to download the images.
-
-
-# ... (previous imports and functions)
 
 # Initial query to grab items
 initial_query = '''{
@@ -80,44 +66,47 @@ cursor = data['data']['boards'][0]['items_page']['cursor']
 
 all_items = items
 image_count = 0
-zipped_data = []
-categories = []  # Initialize categories list
+data_list = []  # Initialize list to store image URLs and categories
 
 # Read the last processed item ID
 last_processed_item_id = read_last_processed_item_id()
 
-categories = []  # Initialize categories list
-images_list = []  # Initialize images list
+# Create a folder to store images
+image_folder = 'images'
+if not os.path.exists(image_folder):
+    os.makedirs(image_folder)
 
 # Loop to fetch all items using pagination with cursor
 while cursor:
+    # Define the query for fetching items
     query = '''{
-  boards(ids: 1450631968) {
-    items_page(limit: 500, cursor:"%s") {
-      cursor
-      items {
-        id
-        column_values {
-          column {
-            title
+      boards(ids: 1450631968) {
+        items_page(limit: 500, cursor:"%s") {
+          cursor
+          items {
+            id
+            column_values {
+              column {
+                title
+              }
+              text
+            }
+            assets {
+              public_url
+            }
           }
-          text
-        }
-        assets {
-          public_url
         }
       }
-    }
-  }
-}''' % cursor
-    
+    }''' % cursor
 
+    # Make the request
     response = requests.post(apiUrl, json={'query': query}, headers=headers)
     data = response.json()
 
     items = data['data']['boards'][0]['items_page']['items']
     cursor = data['data']['boards'][0]['items_page']['cursor']
 
+    # Iterate through fetched items
     for item in items:
         item_id = item['id']
 
@@ -128,6 +117,7 @@ while cursor:
         tags = None
         images = None
 
+        # Extract tags and images from column values
         for column in item['column_values']:
             column_title = column['column']['title']
             text = column['text']
@@ -137,27 +127,33 @@ while cursor:
             elif column_title == 'Images':
                 images = text
 
+        # Process items with images
         if images:
             image_count += 1
             public_urls = [asset['public_url'] for asset in item['assets']]
-            zipped_data.append((item_id, tags, public_urls))
-            print(f"Item ID: {item_id}, TAGS: {tags}, Images: {public_urls} were added to the zip!")
-
-            # Download, resize, and convert images
             for url in public_urls:
+                # Download the image and save it locally
                 try:
                     response = requests.get(url)
                     response.raise_for_status()
 
-                    img = Image.open(BytesIO(response.content))
-                    print(img)
-                    img = img.resize((224, 224))
-                    img_array = np.array(img)
+                    # Open the image using the PIL library
+                    img = Image.open(io.BytesIO(response.content))
+                    
+                    # Find the position of the image name using find and rfind, then save it to the folder
+                    end_index = str(url).find('.jpg') + 4
+                    start_index = str(url).rfind('/', 0, end_index) + 1
+                    image_name = str(url)[start_index:end_index]
+                    print(image_name)
+                    image_filename = os.path.join(image_folder, image_name)
+                    if os.path.exists(image_filename):
+                        print(f"{image_name} already exists, skipping.")
+                    else:
+                      img.save(image_filename)
+                      print(f"{image_name} was saved.")
 
-                    tags_list = [tag.strip() for tag in tags.split(',')]
-                    for tag in tags_list:
-                        images_list.append(img_array)
-                        categories.append(tag)
+                    # Append image file path and corresponding categories to the list
+                    data_list.append({'Image': image_filename, 'Categories': tags})
 
                 except requests.HTTPError as http_err:
                     print(f"HTTP error occurred: {http_err}")
@@ -169,19 +165,13 @@ while cursor:
                     write_last_processed_item_id(item_id)
                     continue
 
-        # Convert categories to binary labels
-        label_binarizer = MultiLabelBinarizer()
-        categories_encoded = label_binarizer.fit_transform([[cat] for cat in categories])
+    # Write the last processed item ID to file
+    write_last_processed_item_id(item_id)
 
-        # Save zipped_data with pickle
-        with open('zipped_data.pkl', 'wb') as f:
-            pickle.dump(zipped_data, f)
+# Create a DataFrame from the list
+df = pd.DataFrame(data_list)
 
-        # Convert images_list to numpy array
-        images_array = np.array(images_list)
+# Save DataFrame to CSV. Use this CSV to remove particular rows with poor images and clean the data etc.
+df.to_csv('images_and_categories.csv', index=False)
 
-        # Save the processed dataset
-        np.savez('processed_dataset.npz', images=images_array, categories=categories_encoded, classes=label_binarizer.classes_)
-
-        print(f"Total items with Images: {len(zipped_data)}. Does this match the amount on the database? Check!")
-        print("Dataset was created!")
+print("CSV file saved successfully!")
