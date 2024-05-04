@@ -199,7 +199,11 @@ while cursor:
 df = pd.DataFrame(data_list)
 
 # Save DataFrame to CSV. Use this CSV to remove particular rows with poor images and clean the data etc.
-df.to_csv('images_and_categories.csv', index=False)
+filenum = 0
+csv_filename = f'images_and_categories_{filenum}.csv'
+while os.path.exists(f'images_and_categories_{filenum}.csv'):
+    filenum +=1
+df.to_csv(f'images_and_categories_{filenum}.csv', index=False)
 
 # Clear the last item ID.
 with open('last_processed_item_id.txt', 'w') as file:
