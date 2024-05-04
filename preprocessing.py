@@ -154,8 +154,10 @@ while cursor:
               continue
           else:
               print("Last item ID was found! Continuing process.")
-              pass
+              # Write the last processed item ID only if it matches
+              write_last_processed_item_id(item_id)
 
+          # Now you can proceed with processing the item
           # Extract tags and images from column values
           for column in item['column_values']:
               column_title = column['column']['title']
@@ -224,5 +226,5 @@ while cursor:
 
 
 print("Operation Complete")
-write_last_processed_item_id(0)
+# write_last_processed_item_id(0)
 
