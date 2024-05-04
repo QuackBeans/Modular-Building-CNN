@@ -14,6 +14,9 @@ from sklearn.preprocessing import MultiLabelBinarizer
 from tqdm import tqdm
 import urllib.parse
 import random
+import shutil
+
+# GLOBAL ---------------------------------------------------------------------------------------------
 
 # Load environment variables from .env file
 load_dotenv()
@@ -21,6 +24,8 @@ apiKey = os.getenv('MONDAY_API_KEY')
 apiUrl = 'https://api.monday.com/v2'
 headers = {"Authorization" : apiKey,
            "API-Version": '2024-04'}
+
+# FUNCTIONS ---------------------------------------------------------------------------------------------
 
 # Read and Write functions to continue the script where it left off if it's interrutped or runs in parts
 # Function to read the last processed item ID from a .txt file
@@ -35,10 +40,33 @@ def read_last_processed_item_id(filename='last_processed_item_id.txt'):
         return 0
     return last_item_id
 
+
 # Function to write the last processed item ID to a .txt file
 def write_last_processed_item_id(item_id, filename='last_processed_item_id.txt'):
     with open(filename, 'w') as file:
         file.write(str(item_id))
+
+
+# Function to create folders for each category if they don't exist already
+def create_category_folders(categories):
+    for category in categories:
+        folder_path = os.path.join('images', category)
+        if not os.path.exists(folder_path):
+            os.makedirs(folder_path)
+
+
+# Function to copy images to their respective category folders
+def copy_images_to_category_folders(image_path, categories):
+    for category in categories:
+        folder_path = os.path.join('images', category)
+        image_name = os.path.basename(image_path)
+        target_path = os.path.join(folder_path, image_name)
+        # Check if the image doesn't already exist in the target folder
+        if not os.path.exists(target_path):
+            # Copy the image to the target folder
+            shutil.copy(image_path, folder_path)
+
+# PROCESSING ---------------------------------------------------------------------------------------------
 
 # Initial query to grab items
 initial_query = '''{
@@ -115,21 +143,18 @@ while cursor:
       # Iterate through fetched items
       for item in items:
           item_id = item['id']
+          tags = None
+          images = None
 
           # Skip items until the last processed item ID is reached
           if last_processed_item_id == 0:
               pass
-      
           elif last_processed_item_id != int(item_id):
               print("Finding last processed item ID...")
               continue
-          
           else:
               print("Last item ID was found! Continuing process.")
               pass
-
-          tags = None
-          images = None
 
           # Extract tags and images from column values
           for column in item['column_values']:
@@ -137,7 +162,7 @@ while cursor:
               text = column['text']
 
               if column_title == 'TAGS':
-                  tags = text
+                  tags = text.split(', ') if text else []
               elif column_title == 'Images':
                   images = text
 
@@ -162,11 +187,14 @@ while cursor:
                       if os.path.exists(image_filename):
                           print(f"{image_name} already exists, skipping.")
                       else:
-                        img.save(image_filename)
-                        print(f"{image_name} was saved.")
-                        # Append image file path and corresponding categories to the list
-                        data_list.append({'Image': image_filename, 'Categories': tags})
-                        write_last_processed_item_id(item_id)
+                          img.save(image_filename)
+                          print(f"{image_name} was saved.")
+                          
+                          # Create folders for each category
+                          create_category_folders(tags)
+                          
+                          # Copy the image to its respective category folders
+                          copy_images_to_category_folders(image_filename, tags)
 
                   except requests.HTTPError as http_err:
                       print(f"HTTP error occurred: {http_err}")
@@ -178,13 +206,12 @@ while cursor:
                       write_last_processed_item_id(item_id)
                       continue
                   
-    # Handle errors for cursor loop. If the link expires, continue the loop to regenerate URL's and continue on from last ID.            
-
+   # Handle errors for cursor loop. If the link expires, continue the loop to regenerate URL's and continue on from last ID.            
     except Exception as e:
         # Handle other exceptions
         print(f"An error occurred: {e}")
 
-        # Check if the error is AccessDenied
+        # Check if the error is AccessDenied on the HTML page
         if '<Code>AccessDenied</Code>' in str(e):
             print("Access Denied. Continuing to next batch.")
             continue  # Continue loop from the beginning
@@ -195,19 +222,7 @@ while cursor:
     # Check how many images have been processed so far
     print(f"\nBatch complete. {image_count} have been processed so far.\n")
 
-# Create a DataFrame from the list
-df = pd.DataFrame(data_list)
 
-# Save DataFrame to CSV. Use this CSV to remove particular rows with poor images and clean the data etc.
-filenum = 0
-csv_filename = f'images_and_categories_{filenum}.csv'
-while os.path.exists(f'images_and_categories_{filenum}.csv'):
-    filenum +=1
-df.to_csv(f'images_and_categories_{filenum}.csv', index=False)
+print("Operation Complete")
+write_last_processed_item_id(0)
 
-# Clear the last item ID.
-with open('last_processed_item_id.txt', 'w') as file:
-    pass  # This clears the file and saves it at the end of the with block
-
-
-print("CSV file saved successfully!")

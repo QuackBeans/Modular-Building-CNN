@@ -4,13 +4,13 @@ verify_ssl = true
 name = "pypi"
 
 [packages]
-tensorflow = "*"
 pandas = "*"
 monday = "*"
 python-dotenv = "*"
 pillow = "*"
 scikit-learn = "*"
 tqdm = "*"
+tensorflow = "*"
 
 [dev-packages]
 
