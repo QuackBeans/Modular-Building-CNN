@@ -1,19 +1,8 @@
 import requests
-import pandas as pd
-import math
 import os
-import pickle
-from monday import MondayClient
-import mimetypes
 from dotenv import load_dotenv
-import numpy as np
 from PIL import Image
 import io
-from sklearn.preprocessing import LabelEncoder
-from sklearn.preprocessing import MultiLabelBinarizer
-from tqdm import tqdm
-import urllib.parse
-import random
 import shutil
 
 # GLOBAL ---------------------------------------------------------------------------------------------
