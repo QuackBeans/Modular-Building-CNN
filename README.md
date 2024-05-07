@@ -16,9 +16,12 @@ This file is used to extract product data from my company's database, retrieving
 
 Once it downloads the images, they are immediately converted into numpy format and zipped with the categories, ready to put in to the model.
 
+This file is most likely going to be useless to the majority of people, as it relates directly to the old company database, and draws its content from there. If you wish to retrain the model, you can build and provide your own dataset.
+
 ## MB_CNN.py
 
 This is the main module for the network training and testing.
+It's a 3-block Convolutional Neural Network architecture that uses binary crossentropy in conjunction with a sigmoid activation for the output, allowing for multi-label classification (not to be confused with multiclass.)
 
 # Notes
 
