@@ -19,3 +19,7 @@ Once it downloads the images, they are immediately converted into numpy format a
 ## MB_CNN.py
 
 This is the main module for the network training and testing.
+
+# Notes
+
+**Remember to manually set last_processed_item_ID.txt back to 0 when the operation is complete**
