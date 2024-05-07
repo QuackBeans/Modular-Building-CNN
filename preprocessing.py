@@ -27,6 +27,7 @@ headers = {"Authorization" : apiKey,
 
 # FUNCTIONS & TOOLS ---------------------------------------------------------------------------------------------
 
+# INTERNAL ------------------------------------------------------------------------------------------------------
 # Read and Write functions to continue the script where it left off if it's interrutped or runs in parts
 # Function to read the last processed item ID from a .txt file
 def read_last_processed_item_id(filename='last_processed_item_id.txt'):
@@ -66,6 +67,8 @@ def copy_images_to_category_folders(image_path, categories):
             # Copy the image to the target folder
             shutil.copy(image_path, folder_path)
 
+# EXTERNAL ----------------------------------------------------------------------------------------------------
+
 # Function to quickly find the amount of data in directory
 def count_images_in_subfolders(dir_path):
     ''' This function returns the total amount of images in a folder,
@@ -83,163 +86,167 @@ def count_images_in_subfolders(dir_path):
 
 # PROCESSING ---------------------------------------------------------------------------------------------
 
-# Initial query to grab items
-initial_query = '''{
-  boards (ids: 1450631968) {
-    items_page (limit: 500) {
-      cursor
-      items {
-        id
-        column_values {
-          column {
-            title
+def main():
+  
+  # Initial query to grab items
+  initial_query = '''{
+    boards (ids: 1450631968) {
+      items_page (limit: 500) {
+        cursor
+        items {
+          id
+          column_values {
+            column {
+              title
+            }
+            text
           }
-          text
-        }
-        assets {
-          public_url
+          assets {
+            public_url
+          }
         }
       }
     }
-  }
-}'''
+  }'''
 
-# Make the initial request
-response = requests.post(apiUrl, json={'query': initial_query}, headers=headers)
-data = response.json()
+  # Make the initial request
+  response = requests.post(apiUrl, json={'query': initial_query}, headers=headers)
+  data = response.json()
 
-items = data['data']['boards'][0]['items_page']['items']
-cursor = data['data']['boards'][0]['items_page']['cursor']
+  items = data['data']['boards'][0]['items_page']['items']
+  cursor = data['data']['boards'][0]['items_page']['cursor']
 
-image_count = 0 # Counter for amount of images
-data_list = []  # Initialize list to store image URLs and categories from all pages
+  image_count = 0 # Counter for amount of images
+  data_list = []  # Initialize list to store image URLs and categories from all pages
 
-# Read the last processed item ID
-last_processed_item_id = read_last_processed_item_id()
+  # Read the last processed item ID
+  last_processed_item_id = read_last_processed_item_id()
 
-# Create a folder to store images
-image_folder = 'images'
-if not os.path.exists(image_folder):
-    os.makedirs(image_folder)
+  # Create a folder to store images
+  image_folder = 'images'
+  if not os.path.exists(image_folder):
+      os.makedirs(image_folder)
 
-# Loop to fetch all items. This will run & process for each page, until there is no new cursor pointing to a new page.
-while cursor:
-    print("Fetching items, please do not abort until one download batch is complete.")
+  # Loop to fetch all items. This will run & process for each page, until there is no new cursor pointing to a new page.
+  while cursor:
+      print("Fetching items, please do not abort until one download batch is complete.")
 
-    try:
-      # Define the query for fetching items
-      query = '''{
-        boards(ids: 1450631968) {
-          items_page(limit: 500, cursor:"%s") {
-            cursor
-            items {
-              id
-              column_values {
-                column {
-                  title
+      try:
+        # Define the query for fetching items
+        query = '''{
+          boards(ids: 1450631968) {
+            items_page(limit: 500, cursor:"%s") {
+              cursor
+              items {
+                id
+                column_values {
+                  column {
+                    title
+                  }
+                  text
                 }
-                text
-              }
-              assets {
-                public_url
+                assets {
+                  public_url
+                }
               }
             }
           }
-        }
-      }''' % cursor
+        }''' % cursor
 
-      # Make the request
-      response = requests.post(apiUrl, json={'query': query}, headers=headers)
-      data = response.json()
+        # Make the request
+        response = requests.post(apiUrl, json={'query': query}, headers=headers)
+        data = response.json()
 
-      items = data['data']['boards'][0]['items_page']['items']
-      cursor = data['data']['boards'][0]['items_page']['cursor']
+        items = data['data']['boards'][0]['items_page']['items']
+        cursor = data['data']['boards'][0]['items_page']['cursor']
 
-      # Iterate through fetched items
-      for item in items:
-          item_id = item['id']
-          tags = None
-          images = None
+        # Iterate through fetched items
+        for item in items:
+            item_id = item['id']
+            tags = None
+            images = None
 
-          # Skip items until the last processed item ID is reached
-          if last_processed_item_id == 0:
-              pass
-          elif last_processed_item_id != int(item_id):
-              print("Finding last processed item ID...")
-              continue
-          else:
-              print("Last item ID was found! Continuing process.")
-              # Write the last processed item ID only if it matches
-              write_last_processed_item_id(item_id)
+            # Skip items until the last processed item ID is reached
+            if last_processed_item_id == 0:
+                pass
+            elif last_processed_item_id != int(item_id):
+                print("Finding last processed item ID...")
+                continue
+            else:
+                print("Last item ID was found! Continuing process.")
+                # Write the last processed item ID only if it matches
+                write_last_processed_item_id(item_id)
 
-          # Now you can proceed with processing the item
-          # Extract tags and images from column values
-          for column in item['column_values']:
-              column_title = column['column']['title']
-              text = column['text']
+            # Now you can proceed with processing the item
+            # Extract tags and images from column values
+            for column in item['column_values']:
+                column_title = column['column']['title']
+                text = column['text']
 
-              if column_title == 'TAGS':
-                  tags = text.split(', ') if text else []
-              elif column_title == 'Images':
-                  images = text
+                if column_title == 'TAGS':
+                    tags = text.split(', ') if text else []
+                elif column_title == 'Images':
+                    images = text
 
-          # Process items with images
-          if images:
-              image_count += 1
-              public_urls = [asset['public_url'] for asset in item['assets']]
-              for url in public_urls:
-                  # Download the image and save it locally
-                  try:
-                      response = requests.get(url)
-                      response.raise_for_status()
+            # Process items with images
+            if images:
+                image_count += 1
+                public_urls = [asset['public_url'] for asset in item['assets']]
+                for url in public_urls:
+                    # Download the image and save it locally
+                    try:
+                        response = requests.get(url)
+                        response.raise_for_status()
 
-                      # Open the image using the PIL library
-                      img = Image.open(io.BytesIO(response.content))
-                      
-                      # Find the position of the image name using find and rfind, then save it to the folder
-                      end_index = str(url).find('.jpg') + 4
-                      start_index = str(url).rfind('/', 0, end_index) + 1
-                      image_name = str(url)[start_index:end_index]
-                      image_filename = os.path.join(image_folder, image_name)
-                      if os.path.exists(image_filename):
-                          print(f"{image_name} already exists, skipping.")
-                      else:
-                          img.save(image_filename)
-                          print(f"{image_name} was saved.")
-                          
-                          # Create folders for each category
-                          create_category_folders(tags)
-                          
-                          # Copy the image to its respective category folders
-                          copy_images_to_category_folders(image_filename, tags)
+                        # Open the image using the PIL library
+                        img = Image.open(io.BytesIO(response.content))
+                        
+                        # Find the position of the image name using find and rfind, then save it to the folder
+                        end_index = str(url).find('.jpg') + 4
+                        start_index = str(url).rfind('/', 0, end_index) + 1
+                        image_name = str(url)[start_index:end_index]
+                        image_filename = os.path.join(image_folder, image_name)
+                        if os.path.exists(image_filename):
+                            print(f"{image_name} already exists, skipping.")
+                        else:
+                            img.save(image_filename)
+                            print(f"{image_name} was saved.")
+                            
+                            # Create folders for each category
+                            create_category_folders(tags)
+                            
+                            # Copy the image to its respective category folders
+                            copy_images_to_category_folders(image_filename, tags)
 
-                  except requests.HTTPError as http_err:
-                      print(f"HTTP error occurred: {http_err}")
-                      write_last_processed_item_id(item_id)
-                      break
+                    except requests.HTTPError as http_err:
+                        print(f"HTTP error occurred: {http_err}")
+                        write_last_processed_item_id(item_id)
+                        break
 
-                  except Exception as e:
-                      print(f"Error downloading {url}: {e}")
-                      write_last_processed_item_id(item_id)
-                      continue
-                  
-   # Handle errors for cursor loop. If the link expires, continue the loop to regenerate URL's and continue on from last ID.            
-    except Exception as e:
-        # Handle other exceptions
-        print(f"An error occurred: {e}")
+                    except Exception as e:
+                        print(f"Error downloading {url}: {e}")
+                        write_last_processed_item_id(item_id)
+                        continue
+                    
+    # Handle errors for cursor loop. If the link expires, continue the loop to regenerate URL's and continue on from last ID.            
+      except Exception as e:
+          # Handle other exceptions
+          print(f"An error occurred: {e}")
 
-        # Check if the error is AccessDenied on the HTML page
-        if '<Code>AccessDenied</Code>' in str(e):
-            print("Access Denied. Continuing to next batch.")
-            continue  # Continue loop from the beginning
-    
+          # Check if the error is AccessDenied on the HTML page
+          if '<Code>AccessDenied</Code>' in str(e):
+              print("Access Denied. Continuing to next batch.")
+              continue  # Continue loop from the beginning
+      
 
-    # Write the last processed item ID to file
-    write_last_processed_item_id(item_id)
-    # Check how many images have been processed so far
-    print(f"\nBatch complete. {image_count} have been processed so far.\n")
+      # Write the last processed item ID to file
+      write_last_processed_item_id(item_id)
+      # Check how many images have been processed so far
+      print(f"\nBatch complete. {image_count} have been processed so far.\n")
 
 
-print("Operation Complete")
-# write_last_processed_item_id(0)
+  print("Operation Complete")
+  # write_last_processed_item_id(0)
 
+if __name__ == "__main__":
+    main()
