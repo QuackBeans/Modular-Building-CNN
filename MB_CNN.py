@@ -1,6 +1,9 @@
 import tensorflow as tf
 from tensorflow.keras.preprocessing.image import ImageDataGenerator
 import preprocessing as pre
+from matplotlib import pyplot
+import time
+import re
 
 # Directories for train/val/test dataset
 train_dir = 'Dataset/train'
@@ -71,13 +74,12 @@ model = tf.keras.models.Sequential([
 
 # Compile the model with binary cross-entropy loss
 model.compile(loss='binary_crossentropy',
-              optimizer='adam',  # You can use other optimizers as well
+              optimizer='adam',
               metrics=['accuracy'])
 
 
 # Print summary to check weights
 model.summary()
-
 
 # Train the model
 history = model.fit(
@@ -88,3 +90,59 @@ history = model.fit(
       validation_steps=None,
       verbose=1)
 
+
+# Save model prompt
+while True:
+    save_model = input("Do you want to save the model? (yes/no): ")
+    if save_model.lower() == 'yes' or save_model.lower() == 'y':
+        while True:
+            mod_name = input("Enter name for model: ")
+            # Check for valid naming conventions and save the model
+            if bool(re.match(r'^[\w\-. ]+$', mod_name)):
+                model.save(f"final_models/{mod_name}.h5")
+                print(f"Model saved as '{mod_name}.h5'.")
+                break
+            else:
+                print("invalid name, please use only letters and numbers.")
+        break
+    elif save_model.lower() == 'no' or save_model.lower() == 'n':
+        print("Model not saved.")
+        break
+
+    else:
+        print('Invalid input, please enter YES or NO.')
+
+# Plot training data prompt
+while True:
+    plot_data = input("Do you want to plot the training data? (yes/no): ")
+    if plot_data.lower() == 'yes' or plot_data.lower() == 'y':
+        # Plot training & validation data for analysis
+        pyplot.figure(figsize=(12, 4))
+
+        pyplot.subplot(1, 2, 1)
+        pyplot.plot(history.history['accuracy'])
+        pyplot.plot(history.history['val_accuracy'])
+        pyplot.title('Model accuracy')
+        pyplot.ylabel('Accuracy')
+        pyplot.xlabel('Epoch')
+        pyplot.legend(['Train', 'Validation'], loc='upper left')
+
+        # Plot training & validation loss values
+        pyplot.subplot(1, 2, 2)
+        pyplot.plot(history.history['loss'])
+        pyplot.plot(history.history['val_loss'])
+        pyplot.title('Model loss')
+        pyplot.ylabel('Loss')
+        pyplot.xlabel('Epoch')
+        pyplot.legend(['Train', 'Validation'], loc='upper left')
+
+        pyplot.tight_layout()
+        pyplot.show()
+
+        print("Operation complete.")
+        break
+    if plot_data.lower() == 'no' or plot_data.lower() == 'n':
+        print("Operation complete.")
+        break
+    else:
+        print('Invalid input, please enter YES or NO.')
