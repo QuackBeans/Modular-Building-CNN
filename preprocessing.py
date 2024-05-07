@@ -25,7 +25,7 @@ apiUrl = 'https://api.monday.com/v2'
 headers = {"Authorization" : apiKey,
            "API-Version": '2024-04'}
 
-# FUNCTIONS ---------------------------------------------------------------------------------------------
+# FUNCTIONS & TOOLS ---------------------------------------------------------------------------------------------
 
 # Read and Write functions to continue the script where it left off if it's interrutped or runs in parts
 # Function to read the last processed item ID from a .txt file
@@ -65,6 +65,21 @@ def copy_images_to_category_folders(image_path, categories):
         if not os.path.exists(target_path):
             # Copy the image to the target folder
             shutil.copy(image_path, folder_path)
+
+# Function to quickly find the amount of data in directory
+def count_images_in_subfolders(dir_path):
+    ''' This function returns the total amount of images in a folder,
+    including all of the subfolders.
+    '''
+    total_images = 0
+    for root, dirs, files in os.walk(dir_path):
+        for file in files:
+            if file.endswith(('.png', '.jpg', '.jpeg', '.bmp', '.gif')):  # Add or remove file types as needed
+                total_images += 1
+            else:
+                raise Exception("Unknown imagefile type. Add file extension to function code.")
+    return total_images
+
 
 # PROCESSING ---------------------------------------------------------------------------------------------
 
