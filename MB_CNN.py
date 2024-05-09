@@ -5,7 +5,8 @@ from matplotlib import pyplot
 import time
 import re
 
-print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+# Set GPU device
+tf.config.experimental.list_physical_devices('GPU')
 
 # Directories for train/val/test dataset
 train_dir = 'Dataset/train'
@@ -66,7 +67,7 @@ x = base_model.output # The output tensor from ResNet to add extra layers to bel
 
 x = tf.keras.layers.GlobalAveragePooling2D()(x)
 x = tf.keras.layers.Dense(512, activation='relu')(x)
-predictions = tf.keras.layers.Dense(15, activation='sigmoid')(x)  # Use sigmoid activation for multi-label
+predictions = tf.keras.layers.Dense(14, activation='sigmoid')(x)  # Use sigmoid activation for multi-label
 
 model = tf.keras.models.Model(inputs=base_model.input, outputs=predictions)
 
