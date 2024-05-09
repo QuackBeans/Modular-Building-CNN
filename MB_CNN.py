@@ -5,6 +5,8 @@ from matplotlib import pyplot
 import time
 import re
 
+print("Num GPUs Available: ", len(tf.config.list_physical_devices('GPU')))
+
 # Directories for train/val/test dataset
 train_dir = 'Dataset/train'
 validation_dir = 'Dataset/validation'
@@ -58,25 +60,20 @@ test_generator = test_datagen.flow_from_directory(
     class_mode='categorical'
 )
 
+# Define the model for multi-label classification. Use Resnet50 pretrained on the imagenet dataset.
+base_model = tf.keras.applications.ResNet50(weights='imagenet', include_top=False, input_shape=(img_width, img_height, 3))
+x = base_model.output # The output tensor from ResNet to add extra layers to below
 
-# Define the model for multi-label classification
-model = tf.keras.models.Sequential([
-    tf.keras.layers.Conv2D(32, (3,3), activation='relu', input_shape=(img_width, img_height, 3)),
-    tf.keras.layers.MaxPooling2D(2, 2),
-    tf.keras.layers.Conv2D(64, (3,3), activation='relu'),
-    tf.keras.layers.MaxPooling2D(2,2),
-    tf.keras.layers.Conv2D(128, (3,3), activation='relu'),
-    tf.keras.layers.MaxPooling2D(2,2),
-    tf.keras.layers.Flatten(),
-    tf.keras.layers.Dense(512, activation='relu'),
-    tf.keras.layers.Dense(15, activation='sigmoid')  # Use sigmoid activation for multi-label
-])
+x = tf.keras.layers.GlobalAveragePooling2D()(x)
+x = tf.keras.layers.Dense(512, activation='relu')(x)
+predictions = tf.keras.layers.Dense(15, activation='sigmoid')(x)  # Use sigmoid activation for multi-label
+
+model = tf.keras.models.Model(inputs=base_model.input, outputs=predictions)
 
 # Compile the model with binary cross-entropy loss
 model.compile(loss='binary_crossentropy',
               optimizer='adam',
               metrics=['accuracy'])
-
 
 # Print summary to check weights
 model.summary()
@@ -85,11 +82,10 @@ model.summary()
 history = model.fit(
       train_generator, # The training dataset generated above
       steps_per_epoch=None,
-      epochs=15,
+      epochs=50,
       validation_data=validation_generator,
       validation_steps=None,
       verbose=1)
-
 
 # Save model prompt
 while True:
@@ -99,8 +95,8 @@ while True:
             mod_name = input("Enter name for model: ")
             # Check for valid naming conventions and save the model
             if bool(re.match(r'^[\w\-. ]+$', mod_name)):
-                model.save(f"final_models/{mod_name}.h5")
-                print(f"Model saved as '{mod_name}.h5'.")
+                model.save(f"final_models/{mod_name}.keras")
+                print(f"Model saved as '{mod_name}.keras'.")
                 break
             else:
                 print("invalid name, please use only letters and numbers.")

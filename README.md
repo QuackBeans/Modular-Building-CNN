@@ -23,6 +23,10 @@ This file is most likely going to be useless to the majority of people, as it re
 This is the main module for the network training and testing.
 It's a 3-block Convolutional Neural Network architecture that uses binary crossentropy in conjunction with a sigmoid activation for the output, allowing for multi-label classification (not to be confused with multiclass.)
 
+## Final Models
+
+This folder contains the final trained models that can loaded and used.
+
 # Notes
 
 **Remember to manually set last_processed_item_ID.txt back to 0 when the operation is complete**
